@@ -10,44 +10,44 @@ const CertificateIssuer = ({ contract, account }) => {
     studentAddress: ''
   });
   const [certificateFile, setCertificateFile] = useState(null);
+  const [fileName, setFileName] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
   const [verificationUrl, setVerificationUrl] = useState('');
+  const [error, setError] = useState('');
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleFileChange = (e) => {
-    setCertificateFile(e.target.files[0]);
+    const file = e.target.files[0];
+    setCertificateFile(file);
+    setFileName(file ? file.name : '');
   };
 
   const issueCertificate = async () => {
+    setError('');
     if (!contract) {
-      alert('Contract not initialized yet. Connect wallet or refresh the page.');
+      setError('Contract not initialized. Connect wallet or refresh the page.');
       return;
     }
     if (!certificateFile) {
-      alert('Please select a certificate file');
+      setError('Please select a certificate file.');
       return;
     }
-
     if (!formData.studentName || !formData.instituteName || !formData.courseName) {
-      alert('Please fill in all required fields');
+      setError('Please fill in all required fields.');
       return;
     }
 
     setLoading(true);
+    setResult(null);
     try {
-      // Upload certificate to IPFS
       const ipfsHash = await uploadToIPFS(certificateFile);
-      
-      // Issue certificate on blockchain
+
       const tx = await contract.issueCertificate(
         formData.studentName,
         formData.instituteName,
@@ -56,43 +56,38 @@ const CertificateIssuer = ({ contract, account }) => {
         formData.studentAddress || account
       );
 
-      const receipt = await tx.wait();
-      // After successful issuance, get latest total and use it as ID
+      await tx.wait();
       const certificateId = await contract.getTotalCertificates();
-      
+
       setResult({
         success: true,
         certificateId: certificateId.toString(),
-        ipfsHash: ipfsHash,
+        ipfsHash,
         transactionHash: tx.hash
       });
 
-      // Build verification URL and generate QR code
       const url = `${window.location.origin}?verifyId=${certificateId.toString()}&hash=${encodeURIComponent(ipfsHash)}`;
       setVerificationUrl(url);
       try {
-        const qr = await QRCode.toDataURL(url);
+        const qr = await QRCode.toDataURL(url, {
+          color: { dark: '#050a12', light: '#ffffff' },
+          width: 200,
+          margin: 2
+        });
         setQrCodeDataUrl(qr);
       } catch (e) {
         console.error('QR generation failed', e);
       }
 
-      // Reset form
-      setFormData({
-        studentName: '',
-        instituteName: '',
-        courseName: '',
-        studentAddress: ''
-      });
+      setFormData({ studentName: '', instituteName: '', courseName: '', studentAddress: '' });
       setCertificateFile(null);
-      document.getElementById('certificateFile').value = '';
-
-    } catch (error) {
-      console.error('Error issuing certificate:', error);
-      setResult({
-        success: false,
-        error: error.message
-      });
+      setFileName('');
+      const fileInput = document.getElementById('certificateFile');
+      if (fileInput) fileInput.value = '';
+    } catch (err) {
+      console.error('Error issuing certificate:', err);
+      setError(err.message || 'Transaction failed. Please try again.');
+      setResult({ success: false });
     } finally {
       setLoading(false);
     }
@@ -101,8 +96,8 @@ const CertificateIssuer = ({ contract, account }) => {
   return (
     <div className="card">
       <h2>Issue Certificate</h2>
-      <p>Upload a certificate file and issue it on the blockchain.</p>
-      
+      <p>Upload a certificate file and issue it permanently on the blockchain.</p>
+
       <div className="form-group">
         <label className="form-label">Student Name *</label>
         <input
@@ -112,7 +107,6 @@ const CertificateIssuer = ({ contract, account }) => {
           value={formData.studentName}
           onChange={handleInputChange}
           placeholder="Enter student's full name"
-          required
         />
       </div>
 
@@ -125,7 +119,6 @@ const CertificateIssuer = ({ contract, account }) => {
           value={formData.instituteName}
           onChange={handleInputChange}
           placeholder="Enter institute name"
-          required
         />
       </div>
 
@@ -138,19 +131,18 @@ const CertificateIssuer = ({ contract, account }) => {
           value={formData.courseName}
           onChange={handleInputChange}
           placeholder="Enter course name"
-          required
         />
       </div>
 
       <div className="form-group">
-        <label className="form-label">Student Wallet Address (Optional)</label>
+        <label className="form-label">Student Wallet Address <span style={{ color: 'var(--muted)' }}>(optional)</span></label>
         <input
           type="text"
           name="studentAddress"
           className="form-input"
           value={formData.studentAddress}
           onChange={handleInputChange}
-          placeholder="Enter student's wallet address (leave empty to use your address)"
+          placeholder="0x… (leave empty to use your address)"
         />
       </div>
 
@@ -163,61 +155,88 @@ const CertificateIssuer = ({ contract, account }) => {
           onChange={handleFileChange}
           accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
         />
-        <small style={{ color: '#666', marginTop: '5px', display: 'block' }}>
-          Supported formats: PDF, JPG, PNG, DOC, DOCX
-        </small>
+        {fileName && (
+          <div className="form-hint" style={{ color: 'var(--accent3)' }}>
+            ✓ {fileName}
+          </div>
+        )}
+        <div className="form-hint">Supported: PDF, JPG, PNG, DOC, DOCX</div>
       </div>
 
-      <button 
-        className="btn btn-success" 
+      {error && <div className="alert alert-error">⚠️ {error}</div>}
+
+      <button
+        className="btn btn-success"
         onClick={issueCertificate}
         disabled={loading}
       >
-        {loading ? 'Issuing Certificate...' : 'Issue Certificate'}
+        {loading ? (
+          <>
+            <span style={{
+              width: 14, height: 14, border: '2px solid rgba(5,10,18,0.3)',
+              borderTopColor: '#050a12', borderRadius: '50%',
+              display: 'inline-block', animation: 'spin 0.7s linear infinite'
+            }} />
+            Issuing…
+          </>
+        ) : (
+          <>📜 Issue Certificate</>
+        )}
       </button>
 
-      {result && (
-        <div className={`alert ${result.success ? 'alert-success' : 'alert-error'}`}>
-          {result.success ? (
-            <div>
-              <h3>✅ Certificate Issued Successfully!</h3>
-              <p><strong>Certificate ID:</strong> {result.certificateId}</p>
-              <p><strong>IPFS Hash:</strong> {result.ipfsHash}</p>
-              <p><strong>Transaction Hash:</strong> 
-                <a 
+      {result && result.success && (
+        <div className="alert alert-success" style={{ marginTop: 20 }}>
+          <h3>🎉 Certificate Issued Successfully</h3>
+          <div className="fields-grid" style={{ marginTop: 14 }}>
+            <div className="field-block">
+              <div className="field-label">Certificate ID</div>
+              <div className="field-value">#{result.certificateId}</div>
+            </div>
+            <div className="field-block mono">
+              <div className="field-label">Transaction</div>
+              <div className="field-value">
+                <a
                   href={`https://goerli.etherscan.io/tx/${result.transactionHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ marginLeft: '5px', color: '#007bff' }}
                 >
-                  View on Etherscan
+                  View on Etherscan ↗
                 </a>
-              </p>
-              {verificationUrl && (
-                <div style={{ marginTop: '12px' }}>
-                  <p><strong>Verification URL:</strong> <a href={verificationUrl} target="_blank" rel="noopener noreferrer">Open</a></p>
-                  {qrCodeDataUrl && (
-                    <div className="qr-code">
-                      <h4>Shareable Verification QR</h4>
-                      <img src={qrCodeDataUrl} alt="Verification QR" />
-                      <div style={{ marginTop: '10px' }}>
-                        <a
-                          className="btn btn-secondary"
-                          href={qrCodeDataUrl}
-                          download={`certificate-${result.certificateId}.png`}
-                        >
-                          Download QR
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              </div>
             </div>
-          ) : (
-            <div>
-              <h3>❌ Error Issuing Certificate</h3>
-              <p>{result.error}</p>
+            <div className="field-block mono full-width">
+              <div className="field-label">IPFS Hash</div>
+              <div className="field-value">{result.ipfsHash}</div>
+            </div>
+          </div>
+
+          {verificationUrl && (
+            <div style={{ marginTop: 14 }}>
+              <div className="field-block mono" style={{ marginBottom: 0 }}>
+                <div className="field-label">Verification URL</div>
+                <div className="field-value">
+                  <a href={verificationUrl} target="_blank" rel="noopener noreferrer">
+                    Open verification link ↗
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {qrCodeDataUrl && (
+            <div className="qr-code" style={{ marginTop: 20 }}>
+              <h4>Shareable Verification QR</h4>
+              <img src={qrCodeDataUrl} alt="Verification QR" />
+              <div style={{ marginTop: 12 }}>
+                <a
+                  className="btn btn-secondary"
+                  href={qrCodeDataUrl}
+                  download={`certificate-${result.certificateId}.png`}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  ⬇ Download QR
+                </a>
+              </div>
             </div>
           )}
         </div>
@@ -227,4 +246,3 @@ const CertificateIssuer = ({ contract, account }) => {
 };
 
 export default CertificateIssuer;
-

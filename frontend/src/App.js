@@ -12,14 +12,12 @@ function App() {
   const [account, setAccount] = useState(null);
   const [contract, setContract] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [initError, setInitError] = useState("");
+  const [initError, setInitError] = useState('');
 
   useEffect(() => {
-    // Check if MetaMask is installed
     if (typeof window.ethereum !== 'undefined') {
       checkConnection();
 
-      // Re-initialize on account or network change
       const handleAccountsChanged = (accounts) => {
         if (accounts && accounts.length > 0) {
           setAccount(accounts[0]);
@@ -63,8 +61,8 @@ function App() {
 
   const connectWallet = async () => {
     try {
-      const accounts = await window.ethereum.request({ 
-        method: 'eth_requestAccounts' 
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
       });
       setAccount(accounts[0]);
       setIsConnected(true);
@@ -80,12 +78,11 @@ function App() {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const network = await provider.getNetwork();
 
-      // If using local contract but wrong network, try to switch
       if (contractInfo.network === 'localhost' && Number(network.chainId) !== 1337) {
         try {
           await window.ethereum.request({
             method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x539' }], // 1337
+            params: [{ chainId: '0x539' }],
           });
         } catch (switchErr) {
           setInitError('Please switch MetaMask to Hardhat Local (chainId 1337).');
@@ -94,49 +91,64 @@ function App() {
       }
 
       const signer = await provider.getSigner();
-      
-      // Validate that a contract exists at the address
       const code = await provider.getCode(contractInfo.address);
       if (!code || code === '0x') {
-        setInitError('Contract not found at configured address on this network. Deploy locally again.');
+        setInitError('Contract not found at configured address. Deploy locally again.');
         setContract(null);
         return;
       }
 
       const abi = Array.isArray(contractABIJson) ? contractABIJson : contractABIJson.abi;
-      if (!abi) {
-        throw new Error('Contract ABI not found');
-      }
-      if (!contractInfo.address) {
-        throw new Error('Contract address not configured');
-      }
+      if (!abi) throw new Error('Contract ABI not found');
+      if (!contractInfo.address) throw new Error('Contract address not configured');
 
       const contractInstance = new ethers.Contract(contractInfo.address, abi, signer);
-      
       setContract(contractInstance);
-      setInitError("");
+      setInitError('');
     } catch (error) {
       console.error('Error initializing contract:', error);
       setContract(null);
-      setInitError('Contract init failed. Check network and address.');
+      if (!initError) setInitError('Contract init failed. Check network and address.');
     }
   };
 
   const tabs = [
-    { id: 'verify', label: 'Verify Certificate', icon: '🔍' },
-    { id: 'issue', label: 'Issue Certificate', icon: '📜' },
-    { id: 'list', label: 'My Certificates', icon: '📋' }
+    { id: 'verify', label: 'Verify', icon: '🔍' },
+    { id: 'issue',  label: 'Issue',  icon: '📜' },
+    { id: 'list',   label: 'My Certs', icon: '📋' }
   ];
 
   return (
     <div className="App">
-      <div className="header">
-        <img src="/logo.png" alt="BlockCertify logo" style={{ height: 280, marginBottom: 12 }} />
+      {/* Ambient orbs */}
+      <div style={{
+        position: 'fixed', width: 500, height: 500,
+        background: 'rgba(56,189,248,0.07)',
+        borderRadius: '50%', filter: 'blur(80px)',
+        top: -150, left: -100, zIndex: 0, pointerEvents: 'none',
+        animation: 'drift 12s ease-in-out infinite'
+      }} />
+      <div style={{
+        position: 'fixed', width: 400, height: 400,
+        background: 'rgba(129,140,248,0.07)',
+        borderRadius: '50%', filter: 'blur(80px)',
+        bottom: -100, right: -80, zIndex: 0, pointerEvents: 'none',
+        animation: 'drift 12s ease-in-out infinite',
+        animationDelay: '-6s'
+      }} />
+
+      {/* Header */}
+      <header className="header">
+        <div className="header-badge">
+          <span className="pulse-dot" />
+          On-Chain Verified
+        </div>
+        <h1>BlockProof</h1>
         <p>Blockchain Certificate Verification System</p>
-      </div>
+      </header>
 
       <div className="container">
-        <Web3Connection 
+        <Web3Connection
           isConnected={isConnected}
           account={account}
           onConnect={connectWallet}
@@ -148,7 +160,7 @@ function App() {
               {tabs.map(tab => (
                 <button
                   key={tab.id}
-                  className={`tab ${activeTab === tab.id ? 'active' : ''}`}
+                  className={`tab${activeTab === tab.id ? ' active' : ''}`}
                   onClick={() => setActiveTab(tab.id)}
                 >
                   <span className="tab-icon">{tab.icon}</span>
@@ -158,26 +170,26 @@ function App() {
             </div>
 
             {initError && (
-              <div className="alert alert-error">{initError}</div>
+              <div className="alert alert-error" style={{ marginBottom: 20 }}>
+                ⚠️ {initError}
+              </div>
             )}
 
             <div className="tab-content active">
-              {activeTab === 'verify' && (
-                <CertificateVerifier contract={contract} />
-              )}
-              {activeTab === 'issue' && (
-                <CertificateIssuer contract={contract} account={account} />
-              )}
-              {activeTab === 'list' && (
-                <CertificateList contract={contract} account={account} />
-              )}
+              {activeTab === 'verify' && <CertificateVerifier contract={contract} />}
+              {activeTab === 'issue'  && <CertificateIssuer  contract={contract} account={account} />}
+              {activeTab === 'list'   && <CertificateList    contract={contract} account={account} />}
             </div>
           </>
         ) : (
-          <div className="card">
-            <div className="alert alert-info">
+          <div className="connect-page">
+            <div className="connect-card">
+              <div className="connect-icon">🔗</div>
               <h3>Connect Your Wallet</h3>
-              <p>Please connect your MetaMask wallet to interact with the certificate verification system.</p>
+              <p>
+                Connect your MetaMask wallet to issue, verify, and manage
+                blockchain certificates on-chain.
+              </p>
               <button className="btn" onClick={connectWallet}>
                 Connect MetaMask
               </button>
@@ -190,4 +202,3 @@ function App() {
 }
 
 export default App;
-

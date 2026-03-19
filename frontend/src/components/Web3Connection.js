@@ -7,34 +7,29 @@ const Web3Connection = ({ isConnected, account, onConnect }) => {
   };
 
   return (
-    <div className="card" style={{ marginBottom: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="wallet-bar">
+      <div className="wallet-info">
+        <div className={`wallet-status-dot ${isConnected ? 'connected' : 'disconnected'}`} />
         <div>
-          <h3 style={{ margin: 0 }}>
-            {isConnected ? '🟢 Wallet Connected' : '🔴 Wallet Not Connected'}
-          </h3>
+          <div className="wallet-label">
+            {isConnected ? 'Wallet Connected' : 'Wallet Not Connected'}
+          </div>
+          {isConnected && account && (
+            <div className="wallet-address">{formatAddress(account)}</div>
+          )}
           {isConnected && (
-            <p style={{ margin: '5px 0 0 0', color: '#666' }}>
-              Account: {formatAddress(account)}
-            </p>
+            <div className="wallet-ready">Ready to interact with blockchain</div>
           )}
         </div>
-        
-        {!isConnected && (
-          <button className="btn" onClick={onConnect}>
-            Connect Wallet
-          </button>
-        )}
       </div>
-      
-      {isConnected && (
-        <div style={{ marginTop: '10px', fontSize: '14px', color: '#666' }}>
-          <p>✅ Ready to interact with the blockchain</p>
-        </div>
+
+      {!isConnected && (
+        <button className="btn btn-secondary" onClick={onConnect}>
+          Connect Wallet
+        </button>
       )}
     </div>
   );
 };
 
 export default Web3Connection;
-

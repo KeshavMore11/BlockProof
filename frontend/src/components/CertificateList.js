@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 const CertificateList = ({ contract, account }) => {
   const [certificates, setCertificates] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [revoking, setRevoking] = useState(null);
+  const [toast, setToast] = useState('');
 
   useEffect(() => {
     if (contract && account) {
@@ -10,58 +12,63 @@ const CertificateList = ({ contract, account }) => {
     }
   }, [contract, account]);
 
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 3500);
+  };
+
   const loadCertificates = async () => {
     try {
       setLoading(true);
-      
-      // Get certificates issued by the current account (institute)
-      const instituteCertificates = await contract.getInstituteCertificates(account);
-      
-      // Get certificates for the current account as student
-      const studentCertificates = await contract.getStudentCertificates(account);
-      
-      // Combine and deduplicate
-      const allCertificateIds = [...new Set([...instituteCertificates, ...studentCertificates])];
-      
-      const certificateData = await Promise.all(
-        allCertificateIds.map(async (id) => {
+
+      const instituteCerts = await contract.getInstituteCertificates(account);
+      const studentCerts  = await contract.getStudentCertificates(account);
+      const allIds = [...new Set([...instituteCerts, ...studentCerts])];
+
+      const data = await Promise.all(
+        allIds.map(async (id) => {
           try {
-            const certificate = await contract.getCertificate(id);
+            const cert = await contract.getCertificate(id);
+
             return {
               id: id.toString(),
-              ...certificate
-            };
-          } catch (error) {
-            console.error(`Error loading certificate ${id}:`, error);
+              studentName: cert.studentName,
+              instituteName: cert.instituteName,
+              courseName: cert.courseName,
+              issueDate: cert.issueDate,
+              ipfsHash: cert.ipfsHash,
+              isValid: cert.isValid,
+              issuer: cert.issuer
+};
+            
+          } catch (err) {
+            console.error(`Error loading cert ${id}:`, err);
             return null;
           }
         })
       );
-      
-      setCertificates(certificateData.filter(cert => cert !== null));
-    } catch (error) {
-      console.error('Error loading certificates:', error);
+
+      setCertificates(data.filter(Boolean));
+    } catch (err) {
+      console.error('Error loading certificates:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const revokeCertificate = async (certificateId) => {
-    if (!window.confirm('Are you sure you want to revoke this certificate?')) {
-      return;
-    }
-
+  const revokeCertificate = async (certId) => {
+    if (!window.confirm('Are you sure you want to permanently revoke this certificate?')) return;
+    setRevoking(certId);
     try {
-      const tx = await contract.revokeCertificate(certificateId);
+      const tx = await contract.revokeCertificate(certId);
       await tx.wait();
-      
-      // Reload certificates
       await loadCertificates();
-      
-      alert('Certificate revoked successfully!');
-    } catch (error) {
-      console.error('Error revoking certificate:', error);
-      alert('Error revoking certificate. Please try again.');
+      showToast('Certificate revoked successfully.');
+    } catch (err) {
+      console.error('Error revoking certificate:', err);
+      showToast('Failed to revoke certificate. Please try again.');
+    } finally {
+      setRevoking(null);
     }
   };
 
@@ -69,8 +76,9 @@ const CertificateList = ({ contract, account }) => {
     return (
       <div className="card">
         <div className="loading">
-          <h3>Loading Certificates...</h3>
-          <p>Please wait while we fetch your certificates.</p>
+          <div className="spinner" />
+          <h3>Loading Certificates</h3>
+          <p>Fetching your on-chain certificates…</p>
         </div>
       </div>
     );
@@ -79,52 +87,76 @@ const CertificateList = ({ contract, account }) => {
   return (
     <div className="card">
       <h2>My Certificates</h2>
-      <p>View and manage certificates issued by you or certificates you own.</p>
-      
+      <p>Certificates issued by you or assigned to your wallet address.</p>
+
+      {toast && (
+        <div className="alert alert-info" style={{ marginBottom: 16 }}>{toast}</div>
+      )}
+
       {certificates.length === 0 ? (
-        <div className="alert alert-info">
+        <div className="empty-state">
+          <div className="empty-icon">📭</div>
           <h3>No Certificates Found</h3>
           <p>You haven't issued or received any certificates yet.</p>
         </div>
       ) : (
         <div className="grid">
-          {certificates.map((certificate) => (
-            <div key={certificate.id} className="certificate-card">
-              <h3>{certificate.studentName}</h3>
+          {certificates.map((cert) => (
+            <div key={cert.id} className="certificate-card">
+              <h3>{cert.studentName}</h3>
+
               <div className="meta">
-                <strong>Institute:</strong> {certificate.instituteName}
+                <strong>Institute</strong>
+                {cert.instituteName}
               </div>
               <div className="meta">
-                <strong>Course:</strong> {certificate.courseName}
+                <strong>Course</strong>
+                {cert.courseName}
               </div>
               <div className="meta">
-                <strong>Issue Date:</strong> {new Date(Number(certificate.issueDate) * 1000).toLocaleDateString()}
+                <strong>Issued</strong>
+                {new Date(Number(cert.issueDate) * 1000).toLocaleDateString('en-US', {
+                  year: 'numeric', month: 'short', day: 'numeric'
+                })}
               </div>
               <div className="meta">
-                <strong>Certificate ID:</strong> {certificate.id}
+                <strong>Cert ID</strong>
+                #{cert.id}
               </div>
-              <div className="meta">
-                <strong>Status:</strong> 
-                <span className={`status ${certificate.isValid ? 'valid' : 'invalid'}`}>
-                  {certificate.isValid ? 'Valid' : 'Revoked'}
+              <div className="meta" style={{ alignItems: 'center' }}>
+                <strong>Status</strong>
+                <span className={`status ${cert.isValid ? 'valid' : 'invalid'}`}>
+                  {cert.isValid ? '● Valid' : '● Revoked'}
                 </span>
               </div>
-              
-              <div style={{ marginTop: '15px' }}>
-                <button 
+
+              <div className="cert-actions">
+                <button
                   className="btn btn-secondary"
-                  onClick={() => window.open(`https://ipfs.io/ipfs/${certificate.ipfsHash}`, '_blank')}
+                  onClick={() => window.open(`https://ipfs.io/ipfs/${cert.ipfsHash}`, '_blank')}
+                  style={{ fontSize: 12, padding: '9px 14px' }}
                 >
-                  View Certificate
+                  View File
                 </button>
-                
-                {certificate.isValid && certificate.issuer.toLowerCase() === account.toLowerCase() && (
-                  <button 
+
+                {cert.isValid && cert.issuer.toLowerCase() === account.toLowerCase() && (
+                  <button
                     className="btn btn-danger"
-                    onClick={() => revokeCertificate(certificate.id)}
-                    style={{ marginLeft: '10px' }}
+                    onClick={() => revokeCertificate(cert.id)}
+                    disabled={revoking === cert.id}
+                    style={{ fontSize: 12, padding: '9px 14px' }}
                   >
-                    Revoke
+                    {revoking === cert.id ? (
+                      <>
+                        <span style={{
+                          width: 12, height: 12,
+                          border: '2px solid rgba(255,255,255,0.3)',
+                          borderTopColor: '#fff', borderRadius: '50%',
+                          display: 'inline-block', animation: 'spin 0.7s linear infinite'
+                        }} />
+                        Revoking…
+                      </>
+                    ) : 'Revoke'}
                   </button>
                 )}
               </div>
@@ -132,10 +164,10 @@ const CertificateList = ({ contract, account }) => {
           ))}
         </div>
       )}
-      
-      <div style={{ marginTop: '20px' }}>
-        <button className="btn" onClick={loadCertificates}>
-          Refresh Certificates
+
+      <div style={{ marginTop: 24 }}>
+        <button className="btn btn-secondary" onClick={loadCertificates}>
+          ↻ Refresh
         </button>
       </div>
     </div>
@@ -143,4 +175,3 @@ const CertificateList = ({ contract, account }) => {
 };
 
 export default CertificateList;
-
