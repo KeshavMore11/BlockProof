@@ -34,6 +34,11 @@ module.exports = {
     tests: "./test",
     cache: "./cache",
     artifacts: "./artifacts"
-  }
+  },
+  etherscan: {
+    apiKey: {
+      sepolia: process.env.ETHERSCAN_API_KEY || "",
+    },
+  },
 };
 

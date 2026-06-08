@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { uploadToIPFS } from '../utils/ipfs';
 import QRCode from 'qrcode';
+import contractInfo from '../contract-info.json';
+
+const etherscanBase = {
+  localhost: null,
+  sepolia: 'https://sepolia.etherscan.io',
+  goerli: 'https://goerli.etherscan.io',
+}[contractInfo.network];
 
 const CertificateIssuer = ({ contract, account }) => {
   const [formData, setFormData] = useState({
@@ -196,7 +203,7 @@ const CertificateIssuer = ({ contract, account }) => {
               <div className="field-label">Transaction</div>
               <div className="field-value">
                 <a
-                  href={`https://goerli.etherscan.io/tx/${result.transactionHash}`}
+                  href={etherscanBase ? `${etherscanBase}/tx/${result.transactionHash}` : '#'}
                   target="_blank"
                   rel="noopener noreferrer"
                 >

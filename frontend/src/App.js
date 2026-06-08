@@ -6,6 +6,7 @@ import CertificateList from './components/CertificateList';
 import Web3Connection from './components/Web3Connection';
 import contractInfo from './contract-info.json';
 import contractABIJson from './contracts/CertificateVerification.json';
+import { ensureNetwork, NETWORKS } from './utils/networks';
 
 function App() {
   const [activeTab, setActiveTab] = useState('verify');
@@ -75,25 +76,14 @@ function App() {
   const initializeContract = async () => {
     try {
       const { ethers } = await import('ethers');
+      await ensureNetwork(window.ethereum, contractInfo.network);
+
       const provider = new ethers.BrowserProvider(window.ethereum);
-      const network = await provider.getNetwork();
-
-      if (contractInfo.network === 'localhost' && Number(network.chainId) !== 1337) {
-        try {
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x539' }],
-          });
-        } catch (switchErr) {
-          setInitError('Please switch MetaMask to Hardhat Local (chainId 1337).');
-          throw switchErr;
-        }
-      }
-
       const signer = await provider.getSigner();
       const code = await provider.getCode(contractInfo.address);
       if (!code || code === '0x') {
-        setInitError('Contract not found at configured address. Deploy locally again.');
+        const networkName = NETWORKS[contractInfo.network]?.name || contractInfo.network;
+        setInitError(`Contract not found on ${networkName}. Check contract-info.json or redeploy.`);
         setContract(null);
         return;
       }
@@ -115,7 +105,7 @@ function App() {
   const tabs = [
     { id: 'verify', label: 'Verify', icon: '🔍' },
     { id: 'issue',  label: 'Issue',  icon: '📜' },
-    { id: 'list',   label: 'My Certs', icon: '📋' }
+    { id: 'list',   label: 'Issued Certificates', icon: '📋' }
   ];
 
   return (

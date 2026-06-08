@@ -1,6 +1,9 @@
 import React from 'react';
+import contractInfo from '../contract-info.json';
+import { NETWORKS } from '../utils/networks';
 
 const Web3Connection = ({ isConnected, account, onConnect }) => {
+  const networkLabel = NETWORKS[contractInfo.network]?.name || contractInfo.network;
   const formatAddress = (address) => {
     if (!address) return '';
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -18,7 +21,7 @@ const Web3Connection = ({ isConnected, account, onConnect }) => {
             <div className="wallet-address">{formatAddress(account)}</div>
           )}
           {isConnected && (
-            <div className="wallet-ready">Ready to interact with blockchain</div>
+            <div className="wallet-ready">Connected to {networkLabel}</div>
           )}
         </div>
       </div>

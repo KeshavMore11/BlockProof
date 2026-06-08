@@ -22,9 +22,6 @@ const CertificateVerifier = ({ contract }) => {
     }
   }, [contract]);
 
-  function openAIScanner() {
-    window.open("http://localhost:3050", "_blank");
-  }
   const verifyCertificate = async (idOverride, expectedHash) => {
     if (!contract) {
       setError('Contract not initialized. Connect wallet and try again.');
